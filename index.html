@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>FM 지역 다이얼</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="FM 다이얼">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#152229">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<style>:root{padding-top:env(safe-area-inset-top,0px)}html,body{margin:0}body{-webkit-tap-highlight-color:transparent}[hidden]{display:none!important}</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.17/hls.min.js"></script>
+<style>
+/* Layout: 리시버 전면 패널 — 위쪽 다이얼 창(88–108MHz 눈금), 아래쪽 방송국 목록, 하단 고정 재생바 */
+:root{
+  --bg:#e7ebee; --panel:#f6f8f9; --ink:#1d262c; --muted:#5d6b74; --line:#c9d1d7;
+  --glass:#152229; --glass-ink:#c8d6dc; --needle:#f0a23a; --accent:#1f7a8c; --live:#2e9d5b;
+  --f-body:"IBM Plex Sans KR",system-ui,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#11181c; --panel:#18222a; --ink:#e3eaee; --muted:#93a3ad; --line:#2a3842;
+  --glass:#0a1216; --glass-ink:#a9bcc4; --needle:#f3ac4c; --accent:#5bb8c9; --live:#4cc47c; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11181c; --panel:#18222a; --ink:#e3eaee; --muted:#93a3ad; --line:#2a3842;
+  --glass:#0a1216; --glass-ink:#a9bcc4; --needle:#f3ac4c; --accent:#5bb8c9; --live:#4cc47c; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 120px}
+.wrap{max-width:760px;margin:0 auto;display:grid;gap:18px}
+h1{font-size:1.45rem;margin:0;letter-spacing:-.01em;text-wrap:balance}
+.sub{color:var(--muted);margin:2px 0 0;font-size:.9rem}
+label.lbl{font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px}
+select{width:100%;font:inherit;font-size:1rem;padding:10px 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink)}
+select:focus-visible,button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* 다이얼 창 */
+.dial{background:var(--glass);border-radius:10px;padding:14px 14px 10px;color:var(--glass-ink);overflow-x:auto}
+.dial-inner{position:relative;min-width:620px;height:96px}
+.scale{position:absolute;left:0;right:0;top:44px;height:1px;background:var(--glass-ink);opacity:.5}
+.tick{position:absolute;top:36px;width:1px;height:8px;background:var(--glass-ink);opacity:.5}
+.tick.major{height:14px;top:30px;opacity:.9}
+.tnum{position:absolute;top:50px;transform:translateX(-50%);font:600 .7rem var(--f-mono);opacity:.85}
+.st{position:absolute;top:4px;transform:translateX(-50%);width:10px;height:22px;border:0;padding:0;background:transparent;cursor:pointer}
+.st::after{content:"";position:absolute;left:4px;top:4px;width:2px;height:16px;background:var(--glass-ink);border-radius:1px;opacity:.75}
+.st.on::after{background:var(--needle);opacity:1}
+.needle{position:absolute;top:0;bottom:16px;width:2px;background:var(--needle);box-shadow:0 0 8px var(--needle);transition:left .35s ease;transform:translateX(-1px)}
+.readout{position:absolute;right:0;bottom:0;font:600 .8rem var(--f-mono);color:var(--needle)}
+.unit{position:absolute;left:0;bottom:0;font:.7rem var(--f-mono);opacity:.7}
+@media (prefers-reduced-motion:reduce){.needle{transition:none}}
+
+/* 목록 */
+.list{display:grid;gap:0;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.row{display:grid;grid-template-columns:76px 1fr auto;align-items:center;gap:12px;padding:12px 14px;border-top:1px solid var(--line)}
+.row:first-child{border-top:0}
+.row.sel{background:color-mix(in srgb,var(--needle) 12%,transparent)}
+.freq{font:600 1.05rem var(--f-mono);font-variant-numeric:tabular-nums}
+.freq small{font-size:.65rem;color:var(--muted);margin-left:2px}
+.name{min-width:0}
+.name b{font-weight:600;display:block}
+.name span{font-size:.8rem;color:var(--muted)}
+.act{font:500 .85rem var(--f-body);padding:7px 12px;border-radius:999px;border:1px solid var(--accent);color:var(--accent);background:transparent;cursor:pointer;text-decoration:none;white-space:nowrap}
+.act.play{background:var(--accent);color:var(--panel)}
+.note{font-size:.82rem;color:var(--muted);margin:0}
+.group-h{font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:6px 0 -8px}
+
+/* 직접 주소 */
+details{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+summary{cursor:pointer;font-weight:500}
+.custom{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.custom input{flex:1 1 220px;min-width:0;font:inherit;padding:9px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+
+/* 재생바 */
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--line);
+  padding:10px max(16px,env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.bar-in{max-width:760px;margin:0 auto;display:flex;align-items:center;gap:12px}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--line);flex:none}
+.dot.live{background:var(--live);box-shadow:0 0 0 4px color-mix(in srgb,var(--live) 25%,transparent)}
+.now{flex:1;min-width:0}
+.now b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.now span{font-size:.8rem;color:var(--muted)}
+.bar input[type=range]{width:90px}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>FM 지역 다이얼</h1>
+    <p class="sub">지역을 고르면 그 지역 주 송신소 주파수가 다이얼에 표시됩니다. 방송국을 누르면 바로 재생하거나 공식 온에어로 연결합니다.</p>
+  </header>
+
+  <div>
+    <label class="lbl" for="region">지역</label>
+    <select id="region"></select>
+  </div>
+
+  <div class="dial" aria-label="FM 다이얼">
+    <div class="dial-inner" id="dial">
+      <div class="scale"></div>
+      <div class="needle" id="needle" style="left:0"></div>
+      <span class="unit">FM · MHz</span>
+      <span class="readout" id="readout">—</span>
+    </div>
+  </div>
+
+  <p class="group-h" id="cnt"></p>
+  <div class="list" id="list"></div>
+  <p class="note">▶ 재생: 페이지 안에서 바로 재생 · 온에어 ↗: 방송사 공식 플레이어(해당 채널)로 이동. KBS·MBC·SBS와 지역 민방은 스트림 주소를 수시로 바꾸고 외부 재생을 막아 두어 공식 플레이어로 연결합니다. 주파수는 각 지역 주 송신소 기준이며, 산간·건물 안에서는 중계소 주파수가 더 잘 잡힐 수 있습니다.</p>
+
+  <details>
+    <summary>스트림 주소 직접 재생 (m3u8 · mp3 · aac)</summary>
+    <div class="custom">
+      <input id="customUrl" type="url" placeholder="https://…/playlist.m3u8" inputmode="url">
+      <button class="act play" id="customPlay" type="button">재생</button>
+    </div>
+    <p class="note" style="margin-top:8px">알고 있는 공개 스트림 주소를 넣으면 여기서 재생합니다. 브라우저 보안상 http 주소나 외부 재생을 막은 주소는 재생되지 않을 수 있습니다.</p>
+  </details>
+</div>
+
+<div class="bar">
+  <div class="bar-in">
+    <span class="dot" id="dot"></span>
+    <div class="now"><b id="nowName">선택된 방송 없음</b><span id="nowSub">▶ 재생 버튼이 있는 방송은 여기서 바로 나옵니다</span></div>
+    <button class="act" id="stopBtn" type="button" hidden>정지</button>
+    <input type="range" id="vol" min="0" max="1" step="0.05" value="0.9" aria-label="볼륨">
+  </div>
+</div>
+<audio id="audio" preload="none"></audio>
+
+<script>
+const KBS = c => `https://onair.kbs.co.kr/index.html?sname=onair&stype=live&ch_code=${c}`;
+const MBC = 'https://mini.imbc.com/';
+const L = { // 방송사 → 이름, 장르, 연결
+  k1:{n:'KBS 1라디오',g:'뉴스·시사',url:KBS(21)},
+  k2:{n:'KBS 2라디오 (해피FM)',g:'가요·트로트',url:KBS(22)},
+  k1f:{n:'KBS 1FM (클래식FM)',g:'클래식·국악',url:KBS(24)},
+  k2f:{n:'KBS 2FM (쿨FM)',g:'가요·팝',url:KBS(25)},
+  k3:{n:'KBS 3라디오',g:'장애인·사회복지',url:KBS(23)},
+  ms:{n:'MBC 표준FM',g:'뉴스·시사·종합',url:MBC},
+  mf:{n:'MBC FM4U',g:'음악',url:MBC},
+  sp:{n:'SBS 파워FM',g:'가요',url:'https://www.sbs.co.kr/live/S07'},
+  sl:{n:'SBS 러브FM',g:'시사·종합',url:'https://www.sbs.co.kr/live/S08'},
+  ebs:{n:'EBS FM',g:'교육·어학',stream:'https://ebsonair.ebs.co.kr/fmradiofamilypc/familypc1m/playlist.m3u8',url:'https://www.ebs.co.kr/radio'},
+  cbs:{n:'CBS 표준FM',g:'시사·기독교',url:'https://www.cbs.co.kr/'},
+  cbsm:{n:'CBS 음악FM',g:'음악',url:'https://www.cbs.co.kr/'},
+  bbs:{n:'BBS 불교방송',g:'불교·종합',url:'https://www.bbsi.co.kr/'},
+  ytn:{n:'YTN 라디오',g:'뉴스',url:'https://radio.ytn.co.kr/'},
+  gugak:{n:'국악방송',g:'국악',url:'https://www.gugakfm.co.kr/'},
+  pbc:{n:'cpbc 가톨릭평화방송',g:'가톨릭·종합',url:'https://www.cpbc.co.kr/'},
+  febc:{n:'극동방송',g:'기독교',url:'https://www.febc.net/'},
+  tbs:{n:'TBS',g:'교통·시사',url:'https://tbs.seoul.kr/'},
+  ifm:{n:'경인방송 iFM',g:'종합',url:'https://www.ifm.kr/'},
+  tbn:{n:'TBN 교통방송',g:'교통',url:'https://www.tbn.or.kr/'},
+  befm:{n:'BeFM 부산영어방송',g:'영어',url:'https://www.befm.or.kr/'},
+  knn:{n:'KNN 파워FM',g:'가요 (SBS 파워FM 네트워크)',url:'https://www.knn.co.kr/'},
+  knnl:{n:'KNN 러브FM',g:'종합',url:'https://www.knn.co.kr/'},
+  tbc:{n:'TBC 드림FM',g:'가요 (SBS 파워FM 네트워크)',url:'https://www.tbc.co.kr/'},
+  kbc:{n:'kbc 마이FM',g:'가요 (SBS 파워FM 네트워크)',url:'https://www.ikbc.co.kr/'},
+  tjb:{n:'TJB 파워FM',g:'가요 (SBS 파워FM 네트워크)',url:'https://www.tjb.co.kr/'},
+  ubc:{n:'ubc 그린FM',g:'가요 (SBS 파워FM 네트워크)',url:'https://www.ubc.co.kr/'},
+  jtv:{n:'JTV 매직FM',g:'가요 (SBS 파워FM 네트워크)',url:'https://www.jtv.co.kr/'},
+  cjb:{n:'CJB 조이FM',g:'가요 (SBS 파워FM 네트워크)',url:'https://www.cjb.co.kr/'},
+  jibs:{n:'JIBS 뉴파워FM',g:'가요 (SBS 파워FM 네트워크)',url:'https://www.jibs.co.kr/'},
+};
+// [주파수, 방송사키, 출력(선택)]
+const R = {
+  '수도권 (서울·경기·인천)':[[89.1,'k2f','10kW'],[90.7,'ifm'],[91.9,'mf','10kW'],[93.1,'k1f'],[93.9,'cbsm'],[94.5,'ytn'],[95.1,'tbs'],[95.9,'ms','10kW'],[97.3,'k1','10kW'],[98.1,'cbs'],[99.1,'gugak'],[101.9,'bbs'],[103.5,'sl'],[104.5,'ebs'],[104.9,'k3'],[105.3,'pbc'],[106.1,'k2','25kW'],[106.9,'febc'],[107.7,'sp','10kW']],
+  '부산·김해·양산':[[87.9,'knnl'],[88.9,'mf','5kW'],[89.9,'bbs','5kW'],[90.5,'befm'],[92.7,'k1f','5kW'],[94.9,'tbn'],[95.9,'ms','3kW'],[97.1,'k2','3kW'],[99.9,'knn','5kW'],[102.1,'cbsm','1kW'],[102.9,'cbs','5kW'],[103.7,'k1','3kW']],
+  '경남 창원·마산':[[91.7,'k1'],[93.9,'k1f','1kW'],[98.9,'ms','3kW'],[100.5,'mf','1kW'],[106.1,'k2']],
+  '경남 진주':[[89.3,'k1f'],[90.3,'k1'],[91.1,'ms'],[97.7,'mf']],
+  '울산':[[90.7,'k1'],[92.3,'ubc'],[97.5,'ms'],[98.7,'mf'],[101.9,'k1f']],
+  '대구':[[89.7,'k1f'],[95.3,'mf'],[96.5,'ms'],[99.3,'tbc'],[101.3,'k1'],[102.3,'k2']],
+  '경북 포항·경주':[[93.5,'k1f'],[95.9,'k1'],[97.9,'mf']],
+  '경북 안동':[[88.1,'k1f'],[90.5,'k1'],[91.3,'mf']],
+  '광주·전남 중부':[[90.5,'k1'],[91.5,'mf'],[92.3,'k1f'],[93.9,'ms'],[95.5,'k2'],[101.1,'kbc']],
+  '전남 목포':[[88.1,'k2'],[89.1,'ms'],[98.3,'k1f'],[102.3,'mf'],[105.9,'k1']],
+  '전남 여수·순천':[[94.5,'k1f'],[95.7,'k1'],[98.3,'mf'],[100.3,'ms'],[102.7,'k2']],
+  '전북 전주':[[90.1,'jtv'],[92.9,'k2'],[96.9,'k1'],[99.1,'mf'],[100.7,'k1f'],[101.7,'ms']],
+  '대전·세종·충남':[[92.5,'ms'],[94.7,'k1'],[95.7,'tjb'],[97.5,'mf'],[98.5,'k1f'],[100.9,'k2']],
+  '충북 청주':[[89.3,'k1'],[90.9,'k2'],[94.1,'k1f'],[99.7,'mf'],[101.5,'cjb'],[107.1,'ms']],
+  '강원 춘천':[[91.1,'k1f'],[92.3,'ms'],[94.5,'mf'],[98.7,'k2'],[99.5,'k1']],
+  '강원 원주':[[89.5,'k1f'],[92.7,'ms'],[97.1,'k1'],[98.9,'mf'],[100.5,'k2']],
+  '강원 강릉·속초':[[89.1,'k1f'],[94.3,'mf'],[96.3,'ms'],[98.9,'k1'],[102.1,'k2']],
+  '제주':[[90.1,'mf'],[91.9,'k2'],[96.3,'k1f'],[97.9,'ms'],[99.1,'k1'],[101.5,'jibs']],
+};
+const $ = id => document.getElementById(id);
+const sel = $('region'), list = $('list'), dial = $('dial'), needle = $('needle'), audio = $('audio');
+const MIN=87.5, MAX=108.0, pos = f => ((f-MIN)/(MAX-MIN)*100)+'%';
+let hls=null, cur=null;
+
+// 눈금
+for(let f=88; f<=108; f++){
+  const t=document.createElement('div'); t.className='tick'+(f%2===0?' major':''); t.style.left=pos(f); dial.appendChild(t);
+  if(f%2===0){const n=document.createElement('span'); n.className='tnum'; n.textContent=f; n.style.left=pos(f); dial.appendChild(n);}
+}
+Object.keys(R).forEach(k=>{const o=document.createElement('option'); o.value=k; o.textContent=k; sel.appendChild(o);});
+let saved=null; try{saved=localStorage.getItem('fm-region')}catch(e){}
+sel.value = (saved && R[saved]) ? saved : '부산·김해·양산';
+
+function render(){
+  const rows=R[sel.value];
+  dial.querySelectorAll('.st').forEach(e=>e.remove());
+  list.innerHTML='';
+  $('cnt').textContent=`${sel.value} · ${rows.length}개 방송`;
+  rows.forEach(([f,k,pw],i)=>{
+    const s=L[k];
+    const b=document.createElement('button'); b.className='st'; b.style.left=pos(f); b.title=`${f} ${s.n}`; b.setAttribute('aria-label',`${f}MHz ${s.n}`);
+    b.onclick=()=>pick(i,true); dial.appendChild(b);
+    const r=document.createElement('div'); r.className='row'; r.dataset.i=i;
+    r.innerHTML=`<div class="freq">${f.toFixed(1)}<small>MHz</small></div>
+      <div class="name"><b>${s.n}</b><span>${s.g}${pw?` · 주 송신 ${pw}`:''}</span></div>`;
+    let a;
+    if(s.stream){a=document.createElement('button'); a.type='button'; a.className='act play'; a.textContent='▶ 재생'; a.onclick=()=>{pick(i,false); play(s.stream,`${f.toFixed(1)} ${s.n}`,sel.value);};}
+    else{a=document.createElement('a'); a.className='act'; a.href=s.url; a.target='_blank'; a.rel='noopener'; a.textContent='온에어 ↗'; a.onclick=()=>pick(i,false);}
+    r.appendChild(a); r.addEventListener('click',e=>{if(e.target===r||!e.target.closest('.act'))pick(i,true)});
+    list.appendChild(r);
+  });
+  pick(0,false);
+}
+function pick(i,scroll){
+  const [f]=R[sel.value][i];
+  needle.style.left=pos(f); $('readout').textContent=f.toFixed(1)+' MHz';
+  dial.querySelectorAll('.st').forEach((e,j)=>e.classList.toggle('on',j===i));
+  list.querySelectorAll('.row').forEach((e,j)=>e.classList.toggle('sel',j===i));
+  if(scroll) list.children[i].scrollIntoView({block:'nearest',behavior:'smooth'});
+}
+function stop(){ if(hls){hls.destroy();hls=null} audio.pause(); audio.removeAttribute('src'); audio.load();
+  $('dot').classList.remove('live'); $('stopBtn').hidden=true; }
+function play(url,name,sub){
+  stop(); cur=url; $('nowName').textContent=name; $('nowSub').textContent='연결 중…'; $('stopBtn').hidden=false;
+  const ok=()=>{$('nowSub').textContent=sub+' · 재생 중'; $('dot').classList.add('live')};
+  const fail=()=>{$('nowSub').textContent='재생할 수 없습니다. 주소가 바뀌었거나 외부 재생이 막힌 스트림입니다.'; $('dot').classList.remove('live')};
+  audio.onplaying=ok; audio.onerror=fail;
+  if(/\.m3u8/i.test(url) && !audio.canPlayType('application/vnd.apple.mpegurl') && window.Hls && Hls.isSupported()){
+    hls=new Hls(); hls.on(Hls.Events.ERROR,(e,d)=>{if(d.fatal)fail()}); hls.loadSource(url); hls.attachMedia(audio);
+    hls.on(Hls.Events.MANIFEST_PARSED,()=>audio.play().catch(fail));
+  } else { audio.src=url; audio.play().catch(fail); }
+}
+sel.onchange=()=>{try{localStorage.setItem('fm-region',sel.value)}catch(e){} render();};
+$('stopBtn').onclick=()=>{stop(); $('nowSub').textContent='정지됨';};
+$('vol').oninput=e=>audio.volume=+e.target.value; audio.volume=0.9;
+$('customPlay').onclick=()=>{const u=$('customUrl').value.trim(); if(!/^https?:\/\//.test(u)){$('nowName').textContent='주소를 확인하세요'; $('nowSub').textContent='http:// 또는 https:// 로 시작해야 합니다'; return;} play(u,'직접 입력한 스트림',u.replace(/^https?:\/\//,'').slice(0,40));};
+// 잠금화면·제어센터 표시
+function mediaInfo(name){ if('mediaSession' in navigator){ navigator.mediaSession.metadata=new MediaMetadata({title:name,artist:'FM 지역 다이얼',artwork:[{src:'icon-512.png',sizes:'512x512',type:'image/png'}]});
+  navigator.mediaSession.setActionHandler('pause',()=>{stop();$('nowSub').textContent='정지됨';}); navigator.mediaSession.setActionHandler('play',()=>{if(cur)play(cur,$('nowName').textContent,sel.value);}); } }
+audio.addEventListener('playing',()=>mediaInfo($('nowName').textContent));
+if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
+render();
+</script>
+</body>
+</html>
+
